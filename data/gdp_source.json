@@ -1,0 +1,25 @@
+{
+  "status": "OK",
+  "indicator": "NY.GDP.MKTP.CD (GDP, current US$)",
+  "origin": "World Bank, World Development Indicators",
+  "retrieved_via": "datasets/gdp mirror of World Bank WDI",
+  "url": "https://raw.githubusercontent.com/datasets/gdp/main/data/gdp.csv",
+  "license": "CC-BY-4.0",
+  "fetched_at": "2026-10-08T15:34:19+00:00",
+  "years": [
+    1960,
+    2023
+  ],
+  "attempts": [
+    {
+      "source": "World Bank API",
+      "ok": false,
+      "error": "URLError(OSError('Tunnel connection failed: 403 Forbidden'))"
+    },
+    {
+      "source": "datasets/gdp mirror of World Bank WDI",
+      "ok": true
+    }
+  ],
+  "note": "順位はこの5か国の中での順位。World Bank の改定で値が変わることがあるため、最終版の前に再取得して確認する。"
+}

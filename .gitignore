@@ -1,0 +1,9 @@
+working/
+.venv/
+__pycache__/
+# 学生が映る映像と、その派生物は公開リポジトリに載せない（README 参照）
+source/*.mp4
+output/*.mp4
+output/*.jpg
+output/stems/ambience.m4a
+assets/*.mp4

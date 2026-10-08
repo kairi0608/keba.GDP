@@ -1,0 +1,4 @@
+numpy>=2.0
+pillow>=11.0
+scipy>=1.13
+pyopenjtalk>=0.4   # 仮音声（Open JTalk）用。初回実行時に辞書を自動ダウンロード
