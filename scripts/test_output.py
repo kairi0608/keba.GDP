@@ -121,13 +121,18 @@ def test_timeline():
           and race[0]["work_in"] <= RACE[0] and race[-1]["work_out"] == RACE[1],
           ", ".join(f"{s['id']}({s['src']} {s['src_in']}-{s['src_out']})" for s in race))
     at = {s["id"]: s for s in segs}
-    check("RUSH は作品17秒開始・A のカーブ直後", at["V04_rush"]["work_in"] == 17.0 and
-          at["V03_A_curve"]["src_in"] == 21.0 and at["V03_A_curve"]["src_out"] == 23.5)
-    check("B は作品20秒で再開（素材 0.0秒から）", at["V05_B_growth"]["work_in"] == 20.0 and
-          at["V05_B_growth"]["src_in"] == 0.0)
+    check("レーススタート（4.0秒）は一直線の B（素材 0.0秒から）",
+          race[0]["src"] == "B" and race[0]["src_in"] == 0.0 and race[0]["work_in"] == RACE[0],
+          f"{race[0]['id']} {race[0]['src']} {race[0]['src_in']}")
+    curve = [s for s in race if s["src"] == "A" and s["src_in"] == 21.0 and s["src_out"] == 23.5]
+    b_end = max(s["work_out"] for s in race if s["src"] == "B")
+    check("A のカーブ（素材 21.0〜23.5秒）は B の後", bool(curve) and curve[0]["work_in"] >= b_end,
+          f"B 終了 {b_end}s → カーブ {curve[0]['work_in'] if curve else '-'}s")
+    check("RUSH は作品17秒開始・20秒で終了", at["V04_rush"]["work_in"] == 17.0 and at["V04_rush"]["work_out"] == 20.0)
+    check("作品20秒に大きな効果音", any(c["name"] == "impact_big" and 19.9 <= c["t"] <= 20.05 for c in TL["sfx"]))
     check("節目: 33.5 オイルショック / 36 政策 / 39台 GDP年表 / 44 問い",
-          at["V07_oilshock"]["work_in"] == 33.5 and at["V08_policy"]["work_in"] == 36.0
-          and 39.0 <= at["V10_gdp_timeline"]["work_in"] < 40.0 and at["V11_question"]["work_in"] == 44.0)
+          at["V08_oilshock"]["work_in"] == 33.5 and at["V09_policy"]["work_in"] == 36.0
+          and 39.0 <= at["V11_gdp_timeline"]["work_in"] < 40.0 and at["V12_question"]["work_in"] == 44.0)
     late = [s for s in segs if s["work_in"] >= 44.0 and s["kind"] == "source"]
     check("終盤 44〜60秒で A/B を流用していない", not late, str([s["id"] for s in late]))
     lines = TL["lines"]
@@ -173,8 +178,8 @@ def test_layout():
 
 
 def main():
-    out = ROOT / "output/rough_cut_v2.mp4"
-    prev = ROOT / "output/preview_0-34.mp4"
+    out = ROOT / "output/rough_cut_v3.mp4"
+    prev = ROOT / "output/preview_0-34_v3.mp4"
     test_sources()
     test_timeline()
     test_layout()

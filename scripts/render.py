@@ -162,44 +162,44 @@ def shake(t, amp, freq=23.0, seed=0.0):
 
 # ---------------------------------------------------------------- 部品スプライト
 
-@lru_cache(maxsize=32)
+GATE_Y = {"beam": (735, 860), "door": (985, 1258), "name": 1268}
+NUM_COL = [((255, 255, 255), BLACK), ((20, 20, 20), WHITE), ((220, 30, 40), WHITE),
+           ((30, 80, 200), WHITE), ((250, 210, 0), BLACK)]
+
+
+@lru_cache(maxsize=16)
 def gate_sprite(open_q):
-    """発走ゲート（5枠）。open_q: 0〜10（扉の開き具合）。"""
+    """発走ゲート（5枠・画面サイズ）。open_q: 0〜10（扉の開き具合）。
+    枠の並びは timeline.json の gate.stalls（B の 1 コマ目の走者の並び）。"""
     p = open_q / 10
-    gw, gh = 1000, 520
-    im = Image.new("RGBA", (gw, gh), (0, 0, 0, 0))
+    im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     green, dark = (22, 128, 62, 255), (10, 70, 34, 255)
-    order = ["JPN", "USA", "DEU", "CHN", "FRA"]
-    num_col = [((255, 255, 255), BLACK), ((20, 20, 20), WHITE), ((220, 30, 40), WHITE),
-               ((30, 80, 200), WHITE), ((250, 210, 0), BLACK)]
-    sw = gw / 5
-    d.rounded_rectangle((0, 0, gw - 1, 120), 16, fill=green, outline=dark, width=6)
-    for i, c in enumerate(order):
-        x0 = i * sw
-        bg, fg = num_col[i]
-        d.rounded_rectangle((x0 + 14, 18, x0 + 70, 102), 10, fill=bg + (255,), outline=(0, 0, 0, 255), width=3)
-        n = text_sprite(str(i + 1), "display", 56, fg)
-        im.alpha_composite(n, (int(x0 + 42 - n.width / 2), int(60 - n.height / 2)))
+    stalls = TL["gate"]["stalls"]
+    x_left, sw = 40, 200
+    b0, b1 = GATE_Y["beam"]
+    d0, d1 = GATE_Y["door"]
+    d.rounded_rectangle((x_left - 10, b0, x_left + sw * 5 + 10, b1), 16, fill=green, outline=dark, width=6)
+    for i in range(6):  # 柱
+        x = x_left + i * sw
+        d.rectangle((x - 9, b1, x + 9, d1 + 4), fill=green, outline=dark, width=2)
+    for i, c in enumerate(stalls):
+        x0 = x_left + i * sw
+        bg, fg = NUM_COL[i]
+        d.rounded_rectangle((x0 + 16, b0 + 20, x0 + 70, b1 - 20), 10, fill=bg + (255,), outline=(0, 0, 0, 255), width=3)
+        n = text_sprite(str(i + 1), "display", 54, fg)
+        im.alpha_composite(n, (int(x0 + 43 - n.width / 2), int((b0 + b1) / 2 - n.height / 2)))
         f = flag(c, 104, 70)
-        im.alpha_composite(f, (int(x0 + 80), 25))
-        # 枠の柱
-        d.rectangle((x0, 120, x0 + 14, gh - 60), fill=green)
-        d.rectangle((x0 + sw - 14, 120, x0 + sw, gh - 60), fill=green)
-        # 扉（左右2枚）
-        door_w = (sw - 28) / 2 * (1 - p)
-        for side in (0, 1):
-            if door_w < 2:
-                continue
-            if side == 0:
-                bx0, bx1 = x0 + 14, x0 + 14 + door_w
-            else:
-                bx0, bx1 = x0 + sw - 14 - door_w, x0 + sw - 14
-            d.rectangle((bx0, 150, bx1, gh - 90), fill=(245, 245, 245, 255), outline=dark, width=4)
-            d.line((bx0, 150, bx1, gh - 90), fill=green, width=6)
-            d.line((bx0, gh - 90, bx1, 150), fill=green, width=6)
-        name = text_sprite(NAME_JA[c], "sans", 34, WHITE, stroke=5, stroke_fill=NAVY)
-        im.alpha_composite(name, (int(x0 + sw / 2 - name.width / 2), gh - name.height - 4))
+        im.alpha_composite(f, (int(x0 + 82), int((b0 + b1) / 2 - 35)))
+        door_w = (sw - 18) / 2 * (1 - p)
+        if door_w >= 2:
+            for bx0, bx1 in ((x0 + 9, x0 + 9 + door_w), (x0 + sw - 9 - door_w, x0 + sw - 9)):
+                d.rectangle((bx0, d0, bx1, d1), fill=(245, 245, 245, 255), outline=dark, width=4)
+                d.line((bx0, d0, bx1, d1), fill=green, width=6)
+                d.line((bx0, d1, bx1, d0), fill=green, width=6)
+        if p < 0.3:  # 扉が開いたら国名は消す（最初の字幕と重ねない）
+            name = text_sprite(NAME_JA[c], "sans", 34, WHITE, stroke=5, stroke_fill=NAVY)
+            im.alpha_composite(name, (int(x0 + sw / 2 - name.width / 2), GATE_Y["name"]))
     return im
 
 
@@ -265,26 +265,29 @@ PAUSE_PILL = pause_pill()
 # ---------------------------------------------------------------- セグメント演出
 
 def fx_gate(img, t, seg):
+    # 静止させた B の 1 コマ目を拡大し、各走者を自分の枠に入れる。扉が開いたら等倍へ戻す
+    g = TL["gate"]
+    z = 1 + (g["freeze_zoom"] - 1) * (1 - ease_in_out(clamp01((t - 3.3) / 0.7)))
+    img, view = zoom(img, z, g["freeze_cx"], g["freeze_cy"])
     img.paste(top_shade(), (0, 0), top_shade())
     out = 1 - clamp01((t - 3.5) / 0.4)
-    for text, col, t0, y in (("このレース、", WHITE, 0.15, 330), ("政治経済で", GOLD, 0.45, 495),
-                             ("動いてます。", WHITE, 0.75, 660)):
+    for text, col, t0, y in (("このレース、", WHITE, 0.15, 285), ("政治経済で", GOLD, 0.45, 440),
+                             ("動いてます。", WHITE, 0.75, 595)):
         p = clamp01((t - t0) / 0.35)
         if p > 0:
-            sp = text_sprite(text, "display", 124, col, stroke=12, stroke_fill=NAVY)
+            sp = text_sprite(text, "display", 118, col, stroke=12, stroke_fill=NAVY)
             paste_center(img, sp, W / 2, y, alpha=min(1.0, p * 2.5) * out, scale=0.55 + 0.45 * ease_out_back(p))
     if 1.3 <= t < 3.25:
         blink = 0.65 + 0.35 * math.sin(t * 10)
         paste_center(img, boxed_text("ゲートイン完了 ― まもなくスタート", size=36, box=(0, 0, 0, 160)),
-                     W / 2, 905, alpha=clamp01((t - 1.3) / 0.25) * blink)
+                     W / 2, 1365, alpha=clamp01((t - 1.3) / 0.25) * blink)
     open_p = ease_out(clamp01((t - 3.25) / 0.3))
     drop = clamp01((t - 3.55) / 0.45)
-    paste_center(img, gate_sprite(round(open_p * 10)), W / 2, 1230 + drop * drop * 700,
-                 alpha=clamp01(t / 0.3) * (1 - drop))
-    return img, View()
+    paste_at(img, gate_sprite(round(open_p * 10)), 0, drop * drop * 900, alpha=clamp01(t / 0.3) * (1 - drop))
+    return img, view
 
 
-def fx_curve_hint(img, t, seg):
+def fx_pre_rush(img, t, seg):
     u = clamp01((t - seg["work_in"]) / (seg["work_out"] - seg["work_in"]))
     img, view = zoom(img, 1 + 0.07 * u * u)
     img = grade_warm(img, 0.6 * u)
@@ -389,7 +392,7 @@ def fx_dash(img, t, seg):
     return img, view
 
 
-SEG_FX = {"gate": fx_gate, "curve_hint": fx_curve_hint, "rush": fx_rush, "flash_in": fx_flash_in,
+SEG_FX = {"gate": fx_gate, "pre_rush": fx_pre_rush, "rush": fx_rush, "flash_in": fx_flash_in,
           "oilshock": fx_oilshock, "policy": fx_policy, "dash": fx_dash}
 
 
@@ -832,7 +835,7 @@ def draw_subtitles(img, t):
 
 @lru_cache(maxsize=1)
 def badge():
-    return boxed_text("ROUGH v2｜仮音声・仮グラフィック", size=22, box=(0, 0, 0, 130), pad=(12, 4), radius=8,
+    return boxed_text("ROUGH v3｜仮音声・仮グラフィック", size=22, box=(0, 0, 0, 130), pad=(12, 4), radius=8,
                       weight=700)
 
 
@@ -880,7 +883,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", type=float, default=0.0)
     ap.add_argument("--end", type=float, default=DUR)
-    ap.add_argument("--out", default="working/video_v2.mp4")
+    ap.add_argument("--out", default="working/video_v3.mp4")
     ap.add_argument("--stills", default="")
     args = ap.parse_args()
     out = ROOT / args.out
