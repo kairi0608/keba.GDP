@@ -133,6 +133,36 @@ def test_timeline():
     check("節目: 33.5 オイルショック / 36 政策 / 39台 GDP年表 / 44 問い",
           at["V08_oilshock"]["work_in"] == 33.5 and at["V09_policy"]["work_in"] == 36.0
           and 39.0 <= at["V11_gdp_timeline"]["work_in"] < 40.0 and at["V12_question"]["work_in"] == 44.0)
+    import render as R
+    import csv as _csv
+    rows = {int(r["year"]): {c: float(r[c]) for c in ("USA", "JPN", "DEU", "CHN", "FRA")}
+            for r in _csv.DictReader((ROOT / "data/gdp_nominal_usd_5countries.csv").open())}
+    bw0, bw1 = TL["board"]["work_in"], TL["board"]["work_out"]
+    mism = []
+    for c in TL["captions"]:
+        if bw0 <= c["in"] < bw1:
+            want = int(c["text"][:4])
+            shown = {int(R.board_year(c["in"] + k * (c["out"] - c["in"]) / 20)) for k in range(21)}
+            if shown != {want}:
+                mism.append(f"{c['text']} ↔ ボード {sorted(shown)}")
+    check("テロップの年と GDP ボードの年が一致", not mism, "; ".join(mism))
+
+    def jrank(y):
+        v = rows[y]
+        return sorted(v, key=lambda k: -v[k]).index("JPN") + 1
+    changes, prev = [], None
+    for i in range(int(bw0 * 100), int(bw1 * 100)):
+        y = int(R.board_year(i / 100))
+        r = jrank(y)
+        if prev is not None and r != prev:
+            changes.append((i / 100, "rank_up" if r < prev else "rank_down"))
+        prev = r
+    sfx = [(c["t"], c["name"]) for c in TL["sfx"] if c["name"].startswith("rank_")]
+    miss = [f"{t:.2f}s {k}" for t, k in changes
+            if not any(abs(t - st) <= 0.05 and sn.startswith(k) for st, sn in sfx)]
+    check("順位の効果音が GDP ボードの順位変化と同期", not miss, "変化: " + ", ".join(f"{t:.2f}{k[5:]}" for t, k in changes)
+          + (" / ずれ: " + ", ".join(miss) if miss else ""))
+
     late = [s for s in segs if s["work_in"] >= 44.0 and s["kind"] == "source"]
     check("終盤 44〜60秒で A/B を流用していない", not late, str([s["id"] for s in late]))
     lines = TL["lines"]
@@ -171,6 +201,34 @@ def test_layout():
             if c["in"] < ln["out"] and ln["in"] < c["out"] and cb[3] > box[1] and cb[1] < box[3]:
                 issues.append(f"字幕 {ln['id']} とテロップ {c['text']} が重なる")
     check("字幕・テロップがセーフエリア内で重ならない", not issues, "; ".join(issues))
+
+    # 年号チップ・GDPボード・ROUGH ラベル・GDP年表の軸
+    from common import text_sprite, boxed_text
+    over = []
+    labels = [e[1] for e in TL["year_chip"] if e[1] not in (None, "board")] + [str(y) for y in range(1960, 1974)]
+    for lb in set(labels):
+        bw = text_sprite(lb, "display", 76).width + 28
+        ink = text_sprite(lb, "display", 76).width
+        if ink > bw - 20:
+            over.append(f"年号 {lb} が箱からはみ出す")
+        left_pop = render.CHIP_LEFT + bw * 0.04 - bw * 0.04
+        subs = [e[2] for e in TL["year_chip"] if e[1] == lb and e[2]] + ["高度経済成長"]
+        right = render.CHIP_LEFT + bw * 0.04 + bw + 14 + max(boxed_text(x, size=28, pad=(16, 6)).width for x in subs)
+        if left_pop < SAFE["x0"] or right > SAFE["x1"]:
+            over.append(f"年号 {lb} ({left_pop:.0f}-{right:.0f})")
+    if not (SAFE["x0"] <= 62 and 62 + 500 <= SAFE["x1"]):
+        over.append("GDPボード")
+    bdg = render.badge()
+    if render.SAFE_X[1] - bdg.width < SAFE["x0"] or 160 < SAFE["y0"]:
+        over.append("ROUGH ラベル")
+    axis_bottom = render.LANE_Y0 + 4 * render.LANE_H + 82 + 40
+    seg = next(s for s in TL["video"] if s.get("graphic") == "gdp_timeline")
+    for ln in TL["lines"]:
+        if ln.get("subtitle", True) and ln["in"] < seg["work_out"] and seg["work_in"] < ln["out"]:
+            sp = render.subtitle_sprite(ln["role"], ln.get("display", ln["text"]), ln.get("style", "box"))
+            if 1345 - sp.height / 2 < axis_bottom:
+                over.append(f"字幕 {ln['id']} が年表の軸ラベル（〜y{axis_bottom}）に重なる")
+    check("年号チップ・ボード・ラベル・年表軸がセーフエリア内で重ならない", not over, "; ".join(over))
     smallest = min(render.subtitle_sprite(ln["role"], ln.get("display", ln["text"]), ln.get("style", "box")).height
                    for ln in TL["lines"] if ln.get("subtitle", True))
     check("字幕の可読サイズ（本文 58px 以上）", smallest >= 58, f"最小の字幕スプライト高さ {smallest}px")

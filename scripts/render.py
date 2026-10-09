@@ -203,16 +203,18 @@ def gate_sprite(open_q):
     return im
 
 
-@lru_cache(maxsize=4)
-def tag_sprite(label):
+@lru_cache(maxsize=64)
+def tag_sprite(label, ptr=0):
+    """日本タグ。ptr は矢印の位置（箱の中心からのずれ・px）。"""
     f = flag("JPN", 60, 40)
     t = text_sprite(label, "sans", 42, WHITE)
     w, h = f.width + t.width + 44, 74
     im = Image.new("RGBA", (w, h + 26), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     d.rounded_rectangle((0, 0, w - 1, h - 1), 20, fill=(220, 0, 40, 240), outline=(255, 255, 255, 255), width=4)
-    d.polygon([(w / 2 - 18, h - 3), (w / 2 + 18, h - 3), (w / 2, h + 24)], fill=(255, 255, 255, 255))
-    d.polygon([(w / 2 - 11, h - 4), (w / 2 + 11, h - 4), (w / 2, h + 14)], fill=(220, 0, 40, 255))
+    px = min(max(w / 2 + ptr, 30), w - 30)
+    d.polygon([(px - 18, h - 3), (px + 18, h - 3), (px, h + 24)], fill=(255, 255, 255, 255))
+    d.polygon([(px - 11, h - 4), (px + 11, h - 4), (px, h + 14)], fill=(220, 0, 40, 255))
     im.alpha_composite(f, (16, (h - f.height) // 2))
     im.alpha_composite(t, (f.width + 26, (h - t.height) // 2 - 2))
     return im
@@ -269,7 +271,8 @@ def fx_gate(img, t, seg):
     g = TL["gate"]
     z = 1 + (g["freeze_zoom"] - 1) * (1 - ease_in_out(clamp01((t - 3.3) / 0.7)))
     img, view = zoom(img, z, g["freeze_cx"], g["freeze_cy"])
-    img.paste(top_shade(), (0, 0), top_shade())
+    shade = with_alpha(top_shade(), 1 - clamp01((t - 3.5) / 0.45))  # 4.0秒の切り替えで明るさが跳ねないように
+    img.paste(shade, (0, 0), shade)
     out = 1 - clamp01((t - 3.5) / 0.4)
     for text, col, t0, y in (("このレース、", WHITE, 0.15, 285), ("政治経済で", GOLD, 0.45, 440),
                              ("動いてます。", WHITE, 0.75, 595)):
@@ -282,8 +285,8 @@ def fx_gate(img, t, seg):
         paste_center(img, boxed_text("ゲートイン完了 ― まもなくスタート", size=36, box=(0, 0, 0, 160)),
                      W / 2, 1365, alpha=clamp01((t - 1.3) / 0.25) * blink)
     open_p = ease_out(clamp01((t - 3.25) / 0.3))
-    drop = clamp01((t - 3.55) / 0.45)
-    paste_at(img, gate_sprite(round(open_p * 10)), 0, drop * drop * 900, alpha=clamp01(t / 0.3) * (1 - drop))
+    drop = clamp01((t - 3.55) / 0.25)  # 字幕の帯に重なる前に消す
+    paste_at(img, gate_sprite(round(open_p * 10)), 0, drop * drop * 300, alpha=clamp01(t / 0.3) * (1 - drop))
     return img, view
 
 
@@ -340,12 +343,12 @@ def fx_oilshock(img, t, seg):
     img = overlay_color(img, WHITE, 0.9 * math.exp(-u * 18))
     band = hazard_band()
     off = int(t * 140) % 56
-    img.paste(band, (-off, 150), band)
+    img.paste(band, (-off, 92), band)
     img.paste(band, (off - 56, 1610), band)
     p = clamp01((t - 33.55) / 0.16)
     if p > 0:
         sx, sy = shake(t, 6 * (1 - clamp01(u / 1.5)), 40, 2)
-        paste_center(img, text_sprite("オイルショック！", "display", 122, (255, 230, 0), stroke=12,
+        paste_center(img, text_sprite("オイルショック！", "display", 106, (255, 230, 0), stroke=12,
                                       stroke_fill=BLACK), W / 2 + sx, 450 + sy, scale=1.9 - 0.9 * ease_out(p))
     return img, view
 
@@ -399,7 +402,7 @@ SEG_FX = {"gate": fx_gate, "pre_rush": fx_pre_rush, "rush": fx_rush, "flash_in":
 # ---------------------------------------------------------------- GDP 年表
 
 CH_X0, CH_X1, CH_GOAL = 170, 820, 978
-LANE_Y0, LANE_H = 500, 160
+LANE_Y0, LANE_H = 460, 150
 
 
 def lane_y(rank):
@@ -677,6 +680,9 @@ def board_year(t):
     return keys[-1][1]
 
 
+SAFE_X = (60, 1020)
+
+
 def draw_tags(img, t, seg, view):
     if seg.get("kind") != "source":
         return
@@ -694,9 +700,14 @@ def draw_tags(img, t, seg, view):
                         f = (st - t0) / (t1 - t0)
                         x, y = view.map(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f)
                         alpha = clamp01((t - a) / 0.15) * clamp01((b - t) / 0.15)
-                        sp = tag_sprite(tag["label"])
-                        paste_at(img, sp, x - sp.width / 2, y - 105 * view.z - sp.height, alpha)
+                        w = tag_sprite(tag["label"]).width
+                        bx = min(max(x - w / 2, SAFE_X[0]), SAFE_X[1] - w)  # 箱はセーフエリア内、矢印で頭を指す
+                        sp = tag_sprite(tag["label"], int(round((x - (bx + w / 2)) / 8) * 8))
+                        paste_at(img, sp, bx, y - 105 * view.z - sp.height, alpha)
                         break
+
+
+CHIP_LEFT = 62
 
 
 def chip_entry(t):
@@ -718,22 +729,21 @@ def draw_year_chip(img, t):
     if label != State.chip_label:
         State.chip_label, State.chip_changed = label, t
     red = label == "1973"
-    box = rounded_box(250, 112, 20, ((220, 0, 30, 245) if red else (255, 196, 0, 245)),
+    ys = text_sprite(label, "display", 76, WHITE if red else NAVY)
+    bw = ys.width + 28  # 文字幅から箱を作る（はみ出し防止）
+    box = rounded_box(bw, 106, 20, ((220, 0, 30, 245) if red else (255, 196, 0, 245)),
                       outline=(255, 255, 255, 255), width=4)
-    ys = text_sprite(label, "display", 84, WHITE if red else NAVY)
-    box.alpha_composite(ys, ((250 - ys.width) // 2, (112 - ys.height) // 2 - 2))
-    pop = 1 + 0.18 * (1 - ease_out(clamp01((t - State.chip_changed) / 0.22)))
-    paste_center(img, box, 50 + 125, 200 + 56, scale=pop)
+    box.alpha_composite(ys, ((bw - ys.width) // 2, (106 - ys.height) // 2 - 2))
+    pop = 1 + 0.08 * (1 - ease_out(clamp01((t - State.chip_changed) / 0.22)))
+    left = CHIP_LEFT + bw * 0.04  # 拡大しても x=60 より内側
+    paste_center(img, box, left + bw / 2, 200 + 53, scale=pop)
     if sub:
         s = boxed_text(sub, size=28, box=(11, 22, 52, 220), pad=(16, 6), radius=12)
-        paste_at(img, s, 312, 200 + 56 - s.height / 2)
+        paste_at(img, s, left + bw + 14, 200 + 53 - s.height / 2)
 
 
 def fmt_oku(usd):
-    oku = usd / 1e8
-    if oku >= 10000:
-        return f"{oku / 10000:.1f}兆ドル"
-    return f"{oku:,.0f}億ドル"
+    return f"{usd / 1e8:,.0f}億ドル"  # 全行を同じ単位にする
 
 
 def draw_board(img, t):
@@ -743,7 +753,7 @@ def draw_board(img, t):
         return
     a = clamp01((t - b["work_in"] - 0.1) / 0.3)
     slide = -60 * (1 - ease_out(a))
-    bx, by, bw = 50 + slide, 385, 500
+    bx, by, bw = 62 + slide, 385, 500
     rows_h = 66
     panel = rounded_box(bw, 60 + rows_h * 5 + 44, 20, (11, 22, 52, 205), outline=(255, 255, 255, 90), width=2)
     hd = text_sprite(b["title"], "sans", 30, GOLD)
@@ -821,6 +831,15 @@ def subtitle_sprite(role, text, style):
     return out
 
 
+def draw_camera_badge(img, t):
+    for c in TL.get("camera_badges", []):
+        if c["in"] <= t < c["out"]:
+            sp = boxed_text(c["text"], size=30, box=(20, 20, 20, 200), pad=(16, 6), radius=12,
+                            outline=(255, 255, 255, 230), outline_w=2)
+            a = clamp01((t - c["in"]) / 0.15) * clamp01((c["out"] - t) / 0.15)
+            paste_at(img, sp, SAFE_X[1] - sp.width, 312, a)
+
+
 def draw_subtitles(img, t):
     for ln in TL["lines"]:
         if ln.get("subtitle", True) and ln["in"] <= t < ln["out"]:
@@ -835,7 +854,7 @@ def draw_subtitles(img, t):
 
 @lru_cache(maxsize=1)
 def badge():
-    return boxed_text("ROUGH v3｜仮音声・仮グラフィック", size=22, box=(0, 0, 0, 130), pad=(12, 4), radius=8,
+    return boxed_text("ROUGH v3｜仮音声・仮グラフィック", size=26, box=(0, 0, 0, 150), pad=(12, 4), radius=8,
                       weight=700)
 
 
@@ -863,10 +882,11 @@ def render_frame(t):
     draw_year_chip(img, t)
     draw_board(img, t)
     draw_captions(img, t)
+    draw_camera_badge(img, t)
     if seg.get("graphic") == "future_run":
         img = fx_future(img, t)
     draw_subtitles(img, t)
-    paste_at(img, badge(), W - badge().width - 24, 64)
+    paste_at(img, badge(), SAFE_X[1] - badge().width, 160)
     return img
 
 
