@@ -50,6 +50,16 @@
   "detail": ""
  },
  {
+  "test": "テロップの年と GDP ボードの年が一致",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "test": "順位の効果音が GDP ボードの順位変化と同期",
+  "ok": true,
+  "detail": "変化: 22.20up, 25.67up, 27.00up, 31.84down, 33.00up"
+ },
+ {
   "test": "終盤 44〜60秒で A/B を流用していない",
   "ok": true,
   "detail": "[]"
@@ -66,6 +76,11 @@
  },
  {
   "test": "字幕・テロップがセーフエリア内で重ならない",
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "test": "年号チップ・ボード・ラベル・年表軸がセーフエリア内で重ならない",
   "ok": true,
   "detail": ""
  },
@@ -177,7 +192,7 @@
  {
   "test": "rough_cut_v3.mp4: ラウドネス -16〜-12 LUFS",
   "ok": true,
-  "detail": "-14.8 LUFS"
+  "detail": "-14.7 LUFS"
  },
  {
   "test": "rough_cut_v3.mp4: トゥルーピーク -1.0 dBTP 以下",
