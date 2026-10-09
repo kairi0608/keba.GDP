@@ -162,7 +162,7 @@ def shake(t, amp, freq=23.0, seed=0.0):
 
 # ---------------------------------------------------------------- 部品スプライト
 
-GATE_Y = {"beam": (735, 860), "door": (985, 1258), "name": 1268}
+GATE_Y = {"beam": (735, 860), "door": (985, 1226), "name": 1240}
 NUM_COL = [((255, 255, 255), BLACK), ((20, 20, 20), WHITE), ((220, 30, 40), WHITE),
            ((30, 80, 200), WHITE), ((250, 210, 0), BLACK)]
 
@@ -285,8 +285,8 @@ def fx_gate(img, t, seg):
         paste_center(img, boxed_text("ゲートイン完了 ― まもなくスタート", size=36, box=(0, 0, 0, 160)),
                      W / 2, 1365, alpha=clamp01((t - 1.3) / 0.25) * blink)
     open_p = ease_out(clamp01((t - 3.25) / 0.3))
-    drop = clamp01((t - 3.55) / 0.25)  # 字幕の帯に重なる前に消す
-    paste_at(img, gate_sprite(round(open_p * 10)), 0, drop * drop * 300, alpha=clamp01(t / 0.3) * (1 - drop))
+    fade = clamp01((t - 3.5) / 0.3)  # その場で消す（字幕の帯 y≥1242 には入らない）
+    paste_at(img, gate_sprite(round(open_p * 10)), 0, 0, alpha=clamp01(t / 0.3) * (1 - fade))
     return img, view
 
 
@@ -341,7 +341,7 @@ def fx_oilshock(img, t, seg):
     img = grade_red(img, 0.88 - 0.25 * clamp01((u - 1.9) / 0.6))
     img = overlay_color(img, (255, 0, 0), 0.16 * (0.5 + 0.5 * math.sin(t * 2 * math.pi * 2.2)))
     img = overlay_color(img, WHITE, 0.9 * math.exp(-u * 18))
-    band = hazard_band()
+    band = hazard_band(W + 112)
     off = int(t * 140) % 56
     img.paste(band, (-off, 92), band)
     img.paste(band, (off - 56, 1610), band)
@@ -379,7 +379,7 @@ def policy_layer(img, t, view=View(), glow_from=38.35):
 
 def fx_policy(img, t, seg):
     img = grade_pause(img)
-    paste_at(img, PAUSE_PILL, W - PAUSE_PILL.width - 50, 220)
+    paste_at(img, PAUSE_PILL, 1020 - PAUSE_PILL.width, 220)
     policy_layer(img, t)
     img = overlay_color(img, WHITE, clamp01((t - 38.85) / 0.15) ** 2 * 0.9)
     return img, View()
@@ -420,10 +420,10 @@ def chart_bg():
     d = ImageDraw.Draw(lay)
     for r in range(1, 6):
         y = lane_y(r)
-        d.rounded_rectangle((120, y - 68, 1030, y + 68), 22,
+        d.rounded_rectangle((136, y - 68, 1018, y + 68), 22,
                             fill=(255, 255, 255, 14 if r % 2 else 24))
         lbl = text_sprite(f"{r}位", "sans", 34, (200, 210, 235))
-        lay.alpha_composite(lbl, (int(70 - lbl.width / 2), int(y - lbl.height / 2)))
+        lay.alpha_composite(lbl, (int(96 - lbl.width / 2), int(y - lbl.height / 2)))
     head = text_sprite("名目GDP順位の推移", "sans", 56, WHITE)
     im.alpha_composite(head, (60, 238))
     sub = text_sprite("5か国中の順位 ／ 出典：世界銀行（名目GDP・米ドル）", "sans", 27, (190, 200, 225), weight=600)
@@ -445,7 +445,7 @@ def chart_bg():
                 c = (255, 255, 255, 255) if (i + j) % 2 == 0 else (20, 20, 20, 255)
                 d.rectangle((CH_GOAL + j * 13, yy, CH_GOAL + 13 + j * 13, yy + 26), fill=c)
         g = text_sprite("GOAL", "display", 38, GOLD, stroke=5, stroke_fill=NAVY)
-        im.alpha_composite(g, (int(CH_GOAL + 13 - g.width / 2), LANE_Y0 - 70 - g.height - 2))
+        im.alpha_composite(g, (int(min(CH_GOAL + 13 - g.width / 2, 1020 - g.width)), LANE_Y0 - 70 - g.height - 2))
     bg = Image.alpha_composite(gradient((9, 18, 46), (20, 38, 84)).convert("RGBA"), lay)
     return Image.alpha_composite(bg, im)
 
@@ -515,7 +515,7 @@ def chart_frame(t, seg_in=39.9):
             a = 1.0 if prog >= y1 else clamp01((prog - y) / 1.5 + 0.4)
             lb = boxed_text(f"{y} {r}位", size=30, box=(220, 0, 40, 235), pad=(14, 6), radius=12,
                             outline=(255, 255, 255, 255), outline_w=3)
-            ly = lane_y(r) - 62 if r > 1 and y != y1 else lane_y(r) + 62
+            ly = lane_y(r) - 76 if r > 1 and y != y1 else lane_y(r) + 76
             paste_center(im, lb, year_x(y), ly, alpha=a)
     jx, jy = heads["JPN"]
     if fut > 0:
@@ -525,7 +525,7 @@ def chart_frame(t, seg_in=39.9):
             dd.line((x, jy, min(x + 12, gx), jy), fill=(255, 45, 85), width=10)
         jx = gx
         q = text_sprite("?", "display", 60, GOLD, stroke=6, stroke_fill=NAVY)
-        im.alpha_composite(q, (int(jx + 30), int(jy - 105)))
+        im.alpha_composite(q, (int(jx - q.width / 2), int(jy - 118)))
     badge = flag_badge("JPN", 70)
     im.alpha_composite(badge, (int(jx - badge.width / 2), int(jy - badge.height / 2)))
     yr = "未来" if fut > 0 else str(int(prog))
@@ -533,7 +533,7 @@ def chart_frame(t, seg_in=39.9):
     paused = t >= seg_in + 2.05
     if paused:
         im = Image.fromarray((np.asarray(im.convert("RGB")).astype(np.float32) * 0.86).astype(np.uint8)).convert("RGBA")
-        im.alpha_composite(PAUSE_PILL, (W - PAUSE_PILL.width - 50, 250))
+        im.alpha_composite(PAUSE_PILL, (1020 - PAUSE_PILL.width, 250))
     else:
         im.alpha_composite(ys, (W - ys.width - 50, 230))
     return im.convert("RGB")
@@ -595,14 +595,14 @@ def placeholder_frame(kind, title, spec):
     for x in range(-H, W, 90):
         d.line((x, 0, x + H, H), fill=(42, 47, 56), width=34)
     if kind == "lecture":
-        d.rectangle((120, 420, 960, 760), fill=(110, 78, 46))
-        d.rectangle((140, 440, 940, 740), fill=(30, 77, 58))
+        d.rectangle((120, 540, 960, 880), fill=(110, 78, 46))
+        d.rectangle((140, 560, 940, 860), fill=(30, 77, 58))
         chalk = text_sprite("政治 × 経済 × 社会", "sans", 60, (235, 240, 230), weight=700)
-        im.paste(chalk, (int(540 - chalk.width / 2), 530), chalk)
-        d.line((220, 660, 560, 660), fill=(220, 225, 215), width=4)
-        d.line((620, 650, 860, 690), fill=(220, 225, 215), width=4)
+        im.paste(chalk, (int(540 - chalk.width / 2), 650), chalk)
+        d.line((220, 780, 560, 780), fill=(220, 225, 215), width=4)
+        d.line((620, 770, 860, 810), fill=(220, 225, 215), width=4)
         for row in range(3):
-            y = 820 + row * 85
+            y = 930 + row * 80
             for col in range(5):
                 x = 170 + col * 185 - row * 6
                 d.ellipse((x + 40, y - 40, x + 90, y + 10), fill=(70, 76, 88))
@@ -616,11 +616,11 @@ def placeholder_frame(kind, title, spec):
         d.rectangle((0, hz - 4, W, hz), fill=(200, 200, 200))
     d.rectangle((40, 40, W - 40, H - 40), outline=(255, 214, 0), width=6)
     pill = boxed_text("未撮影｜差し替え用プレースホルダー", size=36, fill=BLACK, box=(255, 214, 0, 255))
-    im.paste(pill, (int(W / 2 - pill.width / 2), 200), pill)
+    im.paste(pill, (int(W / 2 - pill.width / 2), 218), pill)
     tt = text_sprite(title, "sans", 46, WHITE)
-    im.paste(tt, (int(W / 2 - tt.width / 2), 300), tt)
-    sp = text_sprite(spec, "sans", 28, (215, 220, 230), weight=600, spacing=8)
-    im.paste(sp, (int(W / 2 - sp.width / 2), 1520), sp)
+    im.paste(tt, (int(W / 2 - tt.width / 2), 310), tt)
+    sp = text_sprite(spec, "sans", 27, (215, 220, 230), weight=600, spacing=8)
+    im.paste(sp, (int(W / 2 - sp.width / 2), 385), sp)
     return im
 
 
